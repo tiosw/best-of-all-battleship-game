@@ -1,0 +1,836 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Морской Бой</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans, system-ui); background: var(--color-background-tertiary, #f5f5f0); color: var(--color-text-primary, #1a1a18); min-height: 100vh; }
+
+  .app { max-width: 900px; margin: 0 auto; padding: 16px; }
+
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding: 12px 16px; background: var(--color-background-primary, #fff); border-radius: 12px; border: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.12)); }
+  .logo { font-size: 18px; font-weight: 500; }
+  .logo span { color: #185FA5; }
+  .stats-bar { display: flex; gap: 16px; font-size: 13px; color: var(--color-text-secondary, #888); }
+  .stat { display: flex; align-items: center; gap: 4px; }
+  .stat strong { color: var(--color-text-primary, #1a1a18); }
+
+  .difficulty-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+  .diff-btn { flex: 1; padding: 8px; border: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.12)); border-radius: 8px; background: var(--color-background-primary, #fff); cursor: pointer; font-size: 13px; font-weight: 400; color: var(--color-text-secondary, #888); transition: all 0.15s; }
+  .diff-btn:hover { border-color: #378ADD; color: #185FA5; }
+  .diff-btn.active { background: #E6F1FB; border-color: #378ADD; color: #185FA5; font-weight: 500; }
+
+  .main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  .board-section { background: var(--color-background-primary, #fff); border-radius: 12px; border: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.12)); padding: 14px; }
+  .board-title { font-size: 14px; font-weight: 500; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .board-title .badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: #E6F1FB; color: #185FA5; font-weight: 400; }
+  .board-title .badge.enemy { background: #FCEBEB; color: #A32D2D; }
+
+  .grid-wrapper { overflow: auto; }
+  .grid-labels { display: flex; margin-left: 22px; }
+  .grid-col-label { width: 28px; text-align: center; font-size: 11px; color: var(--color-text-secondary, #888); }
+  .grid-row { display: flex; align-items: center; }
+  .grid-row-label { width: 22px; font-size: 11px; color: var(--color-text-secondary, #888); text-align: center; }
+  .grid { display: grid; grid-template-columns: repeat(10, 28px); gap: 2px; }
+
+  .cell { width: 28px; height: 28px; border-radius: 4px; background: #E6F1FB; border: 1px solid #B5D4F4; cursor: default; display: flex; align-items: center; justify-content: center; font-size: 13px; transition: background 0.1s; position: relative; }
+  .cell.water { background: #E6F1FB; }
+  .cell.ship { background: #3C3489; border-color: #26215C; }
+  .cell.hit { background: #F0997B; border-color: #D85A30; }
+  .cell.miss { background: #D3D1C7; border-color: #B4B2A9; }
+  .cell.sunk { background: #E24B4A; border-color: #A32D2D; }
+  .cell.enemy-ship { background: #E6F1FB; }
+  .cell.enemy-cell:hover { background: #B5D4F4; cursor: crosshair; }
+  .cell.enemy-cell.hit:hover, .cell.enemy-cell.miss:hover, .cell.enemy-cell.sunk:hover { cursor: not-allowed; }
+
+  .cell.placing-valid { background: #C0DD97; border-color: #639922; cursor: pointer; }
+  .cell.placing-invalid { background: #F7C1C1; border-color: #E24B4A; cursor: not-allowed; }
+  .cell.placing-ship { background: #9FE1CB; border-color: #1D9E75; cursor: pointer; }
+  .cell.player-ship { background: #3C3489; border-color: #26215C; }
+
+  .side-panel { display: flex; flex-direction: column; gap: 12px; }
+
+  .status-card { background: var(--color-background-primary, #fff); border-radius: 12px; border: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.12)); padding: 14px; }
+  .status-title { font-size: 13px; color: var(--color-text-secondary, #888); margin-bottom: 8px; }
+  .status-msg { font-size: 14px; font-weight: 500; line-height: 1.4; min-height: 40px; }
+  .status-msg.good { color: #0F6E56; }
+  .status-msg.bad { color: #A32D2D; }
+  .status-msg.info { color: #185FA5; }
+  .status-msg.turn { color: #854F0B; }
+
+  .ships-left { margin-top: 8px; display: flex; gap: 4px; flex-wrap: wrap; }
+  .ship-indicator { width: 10px; height: 10px; border-radius: 2px; background: #3C3489; }
+  .ship-indicator.dead { background: #D3D1C7; }
+
+  .action-btn { width: 100%; padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; }
+  .action-btn.primary { background: #185FA5; color: #fff; }
+  .action-btn.primary:hover { background: #0C447C; }
+  .action-btn.primary:disabled { background: #B5D4F4; cursor: not-allowed; }
+  .action-btn.secondary { background: var(--color-background-secondary, #f5f5f0); border: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.12)); color: var(--color-text-primary, #1a1a18); }
+  .action-btn.secondary:hover { background: var(--color-background-tertiary, #eee); }
+  .action-btn.danger { background: #FCEBEB; border: 0.5px solid #E24B4A; color: #A32D2D; }
+  .action-btn.danger:hover { background: #F7C1C1; }
+
+  .ships-to-place { background: var(--color-background-primary, #fff); border-radius: 12px; border: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.12)); padding: 14px; }
+  .ships-to-place h3 { font-size: 13px; font-weight: 500; margin-bottom: 10px; color: var(--color-text-secondary, #888); }
+  .ship-list { display: flex; flex-direction: column; gap: 6px; }
+  .ship-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; font-size: 13px; transition: all 0.15s; }
+  .ship-item:hover { background: #E6F1FB; border-color: #B5D4F4; }
+  .ship-item.selected { background: #E6F1FB; border-color: #378ADD; }
+  .ship-item.placed { opacity: 0.4; cursor: default; text-decoration: line-through; }
+  .ship-item.placed:hover { background: transparent; border-color: transparent; }
+  .ship-cells { display: flex; gap: 2px; }
+  .ship-cell-preview { width: 10px; height: 10px; border-radius: 2px; background: #3C3489; }
+
+  .rotate-btn { padding: 4px 8px; border-radius: 6px; border: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.12)); background: var(--color-background-secondary, #f5f5f0); cursor: pointer; font-size: 11px; color: var(--color-text-secondary, #888); }
+  .rotate-btn:hover { border-color: #378ADD; color: #185FA5; }
+
+  .probability-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary, #888); cursor: pointer; }
+  .probability-toggle input { cursor: pointer; }
+
+  .prob-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 500; border-radius: 3px; pointer-events: none; }
+
+  .analysis-section { background: var(--color-background-primary, #fff); border-radius: 12px; border: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.12)); padding: 14px; margin-top: 16px; }
+  .analysis-section h3 { font-size: 14px; font-weight: 500; margin-bottom: 12px; }
+  .analysis-loading { display: flex; gap: 6px; align-items: center; color: var(--color-text-secondary, #888); font-size: 13px; }
+  .analysis-dot { width: 6px; height: 6px; border-radius: 50%; background: #185FA5; animation: pulse 1s ease-in-out infinite; }
+  .analysis-dot:nth-child(2) { animation-delay: 0.2s; }
+  .analysis-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse { 0%,100% { opacity: 0.2; } 50% { opacity: 1; } }
+  .analysis-content { font-size: 13px; line-height: 1.6; color: var(--color-text-primary, #1a1a18); }
+  .analysis-content p { margin-bottom: 8px; }
+  .analysis-tag { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; margin-right: 4px; margin-bottom: 4px; }
+  .analysis-tag.good { background: #EAF3DE; color: #3B6D11; }
+  .analysis-tag.bad { background: #FCEBEB; color: #A32D2D; }
+  .analysis-tag.tip { background: #E6F1FB; color: #185FA5; }
+
+  .history-section { background: var(--color-background-primary, #fff); border-radius: 12px; border: 0.5px solid var(--color-border-tertiary, rgba(0,0,0,0.12)); padding: 14px; }
+  .history-section h3 { font-size: 14px; font-weight: 500; margin-bottom: 10px; }
+  .history-list { display: flex; flex-direction: column; gap: 6px; }
+  .history-item { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 6px 8px; background: var(--color-background-secondary, #f5f5f0); border-radius: 6px; }
+  .history-result { font-weight: 500; }
+  .history-result.win { color: #0F6E56; }
+  .history-result.loss { color: #A32D2D; }
+  .history-meta { color: var(--color-text-secondary, #888); font-size: 11px; }
+
+  .pro-banner { background: linear-gradient(135deg, #3C3489 0%, #185FA5 100%); border-radius: 12px; padding: 14px 16px; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+  .pro-text h4 { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+  .pro-text p { font-size: 12px; opacity: 0.8; }
+  .pro-btn { padding: 6px 14px; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); border-radius: 20px; color: #fff; cursor: pointer; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .pro-btn:hover { background: rgba(255,255,255,0.3); }
+
+  @media (max-width: 640px) {
+    .main { grid-template-columns: 1fr; }
+    .cell { width: 26px; height: 26px; }
+    .grid { grid-template-columns: repeat(10, 26px); }
+    .grid-col-label { width: 26px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="logo">⚓ <span>Battle</span>Ship</div>
+    <div class="stats-bar">
+      <div class="stat">🏆 <strong id="stat-wins">0</strong> побед</div>
+      <div class="stat">💀 <strong id="stat-losses">0</strong> поражений</div>
+      <div class="stat">🎯 <strong id="stat-acc">0</strong>% точность</div>
+    </div>
+  </div>
+
+  <div class="difficulty-bar">
+    <button class="diff-btn active" onclick="setDifficulty('easy')">🟢 Лёгкий</button>
+    <button class="diff-btn" onclick="setDifficulty('medium')">🟡 Средний</button>
+    <button class="diff-btn" onclick="setDifficulty('hard')">🔴 Сложный</button>
+    <button class="diff-btn" onclick="setDifficulty('impossible')">💀 Невозможный</button>
+  </div>
+
+  <div class="main">
+    <div>
+      <div class="board-section">
+        <div class="board-title">
+          Ваше поле
+          <span class="badge" id="player-badge">Расстановка</span>
+          <label class="probability-toggle" id="prob-toggle-label" style="display:none">
+            <input type="checkbox" id="prob-toggle" onchange="toggleProbability()"> Вероятности ИИ
+          </label>
+        </div>
+        <div class="grid-wrapper">
+          <div class="grid-labels" id="col-labels-player"></div>
+          <div id="player-rows"></div>
+        </div>
+      </div>
+
+      <div class="ships-to-place" id="ships-panel" style="margin-top:12px">
+        <h3>Расставьте корабли <button class="rotate-btn" onclick="rotateShip()">↺ повернуть (R)</button></h3>
+        <div class="ship-list" id="ship-list"></div>
+        <div style="display:flex; gap:8px; margin-top:10px">
+          <button class="action-btn secondary" onclick="autoPlace()" style="flex:1">🎲 Авторасстановка</button>
+          <button class="action-btn primary" id="start-btn" onclick="startGame()" style="flex:1" disabled>▶ Начать игру</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="board-section">
+        <div class="board-title">
+          Поле противника
+          <span class="badge enemy" id="enemy-badge">Ждём расстановки</span>
+        </div>
+        <div class="grid-wrapper">
+          <div class="grid-labels" id="col-labels-enemy"></div>
+          <div id="enemy-rows"></div>
+        </div>
+      </div>
+
+      <div class="side-panel" style="margin-top:12px">
+        <div class="status-card">
+          <div class="status-title">Статус игры</div>
+          <div class="status-msg info" id="status-msg">Расставьте корабли, чтобы начать</div>
+          <div class="ships-left" id="ships-left-indicator"></div>
+        </div>
+
+        <div class="history-section" id="history-section">
+          <h3>История партий</h3>
+          <div class="history-list" id="history-list">
+            <div style="font-size:13px; color:var(--color-text-secondary)">Ещё нет завершённых партий</div>
+          </div>
+        </div>
+
+        <div class="pro-banner">
+          <div class="pro-text">
+            <h4>⚡ BattleShip Pro</h4>
+            <p>Мультиплеер, скины, рейтинги</p>
+          </div>
+          <button class="pro-btn">Upgrade →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="analysis-section" id="analysis-section" style="display:none">
+    <h3>🤖 AI-анализ партии</h3>
+    <div id="analysis-content"></div>
+  </div>
+</div>
+
+<script>
+const COLS = ['A','B','C','D','E','F','G','H','I','J'];
+const SHIPS_CONFIG = [
+  { id:0, name:'Линкор', size:4, count:1 },
+  { id:1, name:'Крейсер', size:3, count:2 },
+  { id:2, name:'Эсминец', size:2, count:3 },
+  { id:3, name:'Подлодка', size:1, count:4 },
+];
+
+let difficulty = 'easy';
+let gameState = 'placing';
+let playerBoard = Array(100).fill(0);
+let enemyBoard = Array(100).fill(0);
+let playerVisible = Array(100).fill('water');
+let enemyVisible = Array(100).fill('water');
+let playerShipCells = [];
+let enemyShipCells = [];
+let selectedShip = null;
+let isHorizontal = true;
+let placedShips = {};
+let shipInstances = {};
+let hoverCells = [];
+let showProbability = false;
+let probabilityMap = Array(100).fill(0);
+let moveHistory = [];
+let totalShots = 0;
+let totalHits = 0;
+let wins = parseInt(localStorage.getItem('bs_wins')||0);
+let losses = parseInt(localStorage.getItem('bs_losses')||0);
+let totalAccHistory = JSON.parse(localStorage.getItem('bs_acc')||'[]');
+let gameHistory = JSON.parse(localStorage.getItem('bs_history')||'[]');
+let aiLastHit = null;
+let aiHitChain = [];
+let isPlayerTurn = true;
+let sunkEnemyShips = [];
+let sunkPlayerShips = [];
+
+function setDifficulty(d) {
+  difficulty = d;
+  document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+function idx(r,c) { return r*10+c; }
+
+function initBoards() {
+  const colLabels = COLS.map(c => `<div class="grid-col-label">${c}</div>`).join('');
+  document.getElementById('col-labels-player').innerHTML = colLabels;
+  document.getElementById('col-labels-enemy').innerHTML = colLabels;
+
+  const pRows = document.getElementById('player-rows');
+  const eRows = document.getElementById('enemy-rows');
+  pRows.innerHTML = '';
+  eRows.innerHTML = '';
+
+  for(let r=0;r<10;r++) {
+    let pRow = `<div class="grid-row"><div class="grid-row-label">${r+1}</div><div class="grid">`;
+    let eRow = `<div class="grid-row"><div class="grid-row-label">${r+1}</div><div class="grid">`;
+    for(let c=0;c<10;c++) {
+      const i = idx(r,c);
+      pRow += `<div class="cell water" id="pc-${i}" onmouseenter="hoverCell(${r},${c})" onmouseleave="clearHover()" onclick="placeShipAt(${r},${c})"></div>`;
+      eRow += `<div class="cell water enemy-cell" id="ec-${i}" onclick="shoot(${r},${c})"></div>`;
+    }
+    pRow += '</div></div>';
+    eRow += '</div></div>';
+    pRows.innerHTML += pRow;
+    eRows.innerHTML += eRow;
+  }
+
+  renderShipList();
+  updateStatsBar();
+  renderHistory();
+}
+
+function renderShipList() {
+  const list = document.getElementById('ship-list');
+  list.innerHTML = '';
+  SHIPS_CONFIG.forEach(sc => {
+    for(let i=0;i<sc.count;i++) {
+      const key = `${sc.id}_${i}`;
+      const placed = !!placedShips[key];
+      const isSelected = selectedShip && selectedShip.key === key;
+      const cells = Array(sc.size).fill(0).map(()=>`<div class="ship-cell-preview"></div>`).join('');
+      list.innerHTML += `
+        <div class="ship-item ${placed?'placed':''} ${isSelected?'selected':''}" id="si-${key}" onclick="${placed?'':'selectShip(\''+key+'\','+sc.size+')'}">
+          <div class="ship-cells">${cells}</div>
+          <span>${sc.name} (${sc.size})</span>
+        </div>`;
+    }
+  });
+}
+
+function selectShip(key, size) {
+  if(placedShips[key]) return;
+  selectedShip = {key, size};
+  renderShipList();
+}
+
+function rotateShip() {
+  isHorizontal = !isHorizontal;
+  clearHover();
+}
+document.addEventListener('keydown', e => { if(e.key==='r'||e.key==='R') rotateShip(); });
+
+function hoverCell(r,c) {
+  if(gameState !== 'placing' || !selectedShip) return;
+  clearHover(false);
+  const cells = getShipCells(r,c,selectedShip.size,isHorizontal);
+  const valid = isValidPlacement(cells);
+  hoverCells = cells;
+  cells.forEach(i => {
+    const el = document.getElementById(`pc-${i}`);
+    if(el) el.classList.add(valid?'placing-valid':'placing-invalid');
+  });
+}
+
+function clearHover(reset=true) {
+  hoverCells.forEach(i => {
+    const el = document.getElementById(`pc-${i}`);
+    if(el) { el.classList.remove('placing-valid','placing-invalid','placing-ship'); }
+  });
+  if(reset) hoverCells = [];
+}
+
+function getShipCells(r,c,size,horiz) {
+  const cells = [];
+  for(let i=0;i<size;i++) {
+    const nr = horiz ? r : r+i;
+    const nc = horiz ? c+i : c;
+    if(nr<10&&nc<10) cells.push(idx(nr,nc));
+    else return null;
+  }
+  return cells;
+}
+
+function isValidPlacement(cells) {
+  if(!cells||cells.length<1) return false;
+  for(const ci of cells) {
+    if(playerBoard[ci]) return false;
+    const r=Math.floor(ci/10), c=ci%10;
+    for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++) {
+      const nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<10&&nc>=0&&nc<10&&playerBoard[idx(nr,nc)]) return false;
+    }
+  }
+  return true;
+}
+
+function placeShipAt(r,c) {
+  if(gameState !== 'placing' || !selectedShip) return;
+  const cells = getShipCells(r,c,selectedShip.size,isHorizontal);
+  if(!cells||!isValidPlacement(cells)) return;
+  cells.forEach(i => { playerBoard[i] = selectedShip.key; });
+  placedShips[selectedShip.key] = cells;
+  shipInstances[selectedShip.key] = { cells, hits:0 };
+  cells.forEach(i => {
+    const el = document.getElementById(`pc-${i}`);
+    if(el) { el.className='cell player-ship'; }
+  });
+  selectedShip = null;
+  hoverCells = [];
+  const allShips = SHIPS_CONFIG.reduce((a,sc)=>a+(sc.count),0);
+  const placed = Object.keys(placedShips).length;
+  document.getElementById('start-btn').disabled = placed < allShips;
+  renderShipList();
+}
+
+function autoPlace() {
+  playerBoard = Array(100).fill(0);
+  placedShips = {};
+  shipInstances = {};
+  document.querySelectorAll('[id^="pc-"]').forEach(el => { el.className='cell water'; });
+  const allKeys = [];
+  SHIPS_CONFIG.forEach(sc => { for(let i=0;i<sc.count;i++) allKeys.push({key:`${sc.id}_${i}`,size:sc.size}); });
+  for(const {key,size} of allKeys) {
+    let placed = false;
+    let tries = 0;
+    while(!placed && tries<200) {
+      tries++;
+      const r=Math.floor(Math.random()*10), c=Math.floor(Math.random()*10), h=Math.random()>0.5;
+      const cells = getShipCells(r,c,size,h);
+      if(cells&&isValidPlacement(cells)) {
+        cells.forEach(i => { playerBoard[i]=key; });
+        placedShips[key]=cells;
+        shipInstances[key]={cells,hits:0};
+        cells.forEach(i => {
+          const el=document.getElementById(`pc-${i}`);
+          if(el) el.className='cell player-ship';
+        });
+        placed=true;
+      }
+    }
+  }
+  document.getElementById('start-btn').disabled = false;
+  renderShipList();
+}
+
+function placeEnemyShips() {
+  enemyBoard = Array(100).fill(0);
+  const allKeys = [];
+  SHIPS_CONFIG.forEach(sc => { for(let i=0;i<sc.count;i++) allKeys.push({key:`e${sc.id}_${i}`,size:sc.size}); });
+  for(const {key,size} of allKeys) {
+    let placed=false, tries=0;
+    while(!placed&&tries<500) {
+      tries++;
+      const r=Math.floor(Math.random()*10),c=Math.floor(Math.random()*10),h=Math.random()>0.5;
+      const cells=[];
+      let ok=true;
+      for(let i=0;i<size;i++){
+        const nr=h?r:r+i,nc=h?c+i:c;
+        if(nr>=10||nc>=10){ok=false;break;}
+        cells.push(idx(nr,nc));
+      }
+      if(!ok) continue;
+      let conflict=false;
+      for(const ci of cells){
+        if(enemyBoard[ci]){conflict=true;break;}
+        const er=Math.floor(ci/10),ec=ci%10;
+        for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+          const nr2=er+dr,nc2=ec+dc;
+          if(nr2>=0&&nr2<10&&nc2>=0&&nc2<10&&enemyBoard[idx(nr2,nc2)]){conflict=true;}
+        }
+      }
+      if(!conflict){
+        cells.forEach(ci=>{enemyBoard[ci]=key;});
+        enemyShipCells.push({key,cells,hits:[]});
+        placed=true;
+      }
+    }
+  }
+}
+
+function startGame() {
+  const allShips = SHIPS_CONFIG.reduce((a,sc)=>a+sc.count,0);
+  if(Object.keys(placedShips).length < allShips) return;
+  gameState='playing';
+  isPlayerTurn=true;
+  moveHistory=[];
+  totalShots=0;
+  totalHits=0;
+  sunkEnemyShips=[];
+  sunkPlayerShips=[];
+  aiLastHit=null;
+  aiHitChain=[];
+  enemyVisible=Array(100).fill('water');
+  placeEnemyShips();
+  document.getElementById('ships-panel').style.display='none';
+  document.getElementById('player-badge').textContent='Ваше поле';
+  document.getElementById('enemy-badge').textContent='Атакуйте!';
+  document.getElementById('prob-toggle-label').style.display='flex';
+  setStatus('Ваш ход! Нажмите на клетку противника', 'turn');
+  updateShipsLeftIndicator();
+  calculateProbabilityMap();
+}
+
+function setStatus(msg, type='info') {
+  const el=document.getElementById('status-msg');
+  el.textContent=msg; el.className='status-msg '+type;
+}
+
+function shoot(r,c) {
+  if(gameState!=='playing'||!isPlayerTurn) return;
+  const i=idx(r,c);
+  if(enemyVisible[i]!=='water') return;
+  totalShots++;
+  const hit = !!enemyBoard[i];
+  if(hit) {
+    totalHits++;
+    const key=enemyBoard[i];
+    const ship=enemyShipCells.find(s=>s.key===key);
+    ship.hits.push(i);
+    const sunk=ship.hits.length===ship.cells.length;
+    enemyVisible[i]= sunk?'sunk':'hit';
+    if(sunk){
+      ship.cells.forEach(ci=>{ enemyVisible[ci]='sunk'; renderEnemyCell(ci); });
+      sunkEnemyShips.push(key);
+      markSurroundingMisses(ship.cells,'enemy');
+      moveHistory.push({type:'sunk',pos:[r,c],player:'player'});
+      if(sunkEnemyShips.length===enemyShipCells.length){
+        endGame('win'); return;
+      }
+      setStatus('💥 Потопил! Ваш ход снова!', 'good');
+    } else {
+      moveHistory.push({type:'hit',pos:[r,c],player:'player'});
+      setStatus('🔥 Попал! Стреляй ещё!', 'good');
+    }
+  } else {
+    enemyVisible[i]='miss';
+    moveHistory.push({type:'miss',pos:[r,c],player:'player'});
+    setStatus('💨 Мимо. Ход переходит к ИИ...', 'bad');
+    isPlayerTurn=false;
+    calculateProbabilityMap();
+    renderEnemyCell(i);
+    updateShipsLeftIndicator();
+    setTimeout(aiTurn, 800);
+    return;
+  }
+  calculateProbabilityMap();
+  renderEnemyCell(i);
+  updateShipsLeftIndicator();
+}
+
+function renderEnemyCell(i) {
+  const el=document.getElementById(`ec-${i}`);
+  if(!el) return;
+  const v=enemyVisible[i];
+  el.className=`cell enemy-cell ${v}`;
+  if(v==='hit') el.textContent='🔥';
+  else if(v==='miss') el.textContent='·';
+  else if(v==='sunk') el.textContent='💀';
+  else el.textContent='';
+  if(showProbability&&v==='water') {
+    const p=probabilityMap[i];
+    if(p>0){
+      const intensity=Math.min(p/Math.max(...probabilityMap),1);
+      el.style.background=`rgba(55,138,221,${0.1+intensity*0.6})`;
+    } else el.style.background='';
+  } else if(v==='water') el.style.background='';
+}
+
+function renderPlayerCell(i, state) {
+  const el=document.getElementById(`pc-${i}`);
+  if(!el) return;
+  if(state==='hit'){el.className='cell hit';el.textContent='🔥';}
+  else if(state==='miss'){el.className='cell miss';el.textContent='·';}
+  else if(state==='sunk'){el.className='cell sunk';el.textContent='💀';}
+}
+
+function markSurroundingMisses(cells, board) {
+  const neighbors=new Set();
+  cells.forEach(ci=>{
+    const r=Math.floor(ci/10),c=ci%10;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      const nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<10&&nc>=0&&nc<10){neighbors.add(idx(nr,nc));}
+    }
+  });
+  cells.forEach(ci=>neighbors.delete(ci));
+  if(board==='enemy'){
+    neighbors.forEach(ni=>{ if(enemyVisible[ni]==='water'){enemyVisible[ni]='miss';renderEnemyCell(ni);}});
+  } else {
+    neighbors.forEach(ni=>{ if(playerVisible[ni]==='water'){playerVisible[ni]='miss';renderPlayerCell(ni,'miss');}});
+  }
+}
+
+function calculateProbabilityMap() {
+  probabilityMap=Array(100).fill(0);
+  if(gameState!=='playing') return;
+  const ships = SHIPS_CONFIG.flatMap(sc=>Array(sc.count).fill(sc.size)).filter((_,i2)=>{
+    const key=`e${Math.floor(i2/1)}_${i2%1}`;
+    return true;
+  });
+  const remainingSizes = enemyShipCells
+    .filter(s=>!sunkEnemyShips.includes(s.key))
+    .map(s=>s.cells.length);
+  remainingSizes.forEach(size=>{
+    for(let r=0;r<10;r++)for(let c=0;c<10;c++){
+      if(c+size<=10){
+        let ok=true;
+        const cells=[];
+        for(let k=0;k<size;k++){const ni=idx(r,c+k);cells.push(ni);if(enemyVisible[ni]!=='water'&&enemyVisible[ni]!=='hit'){ok=false;break;}}
+        if(ok) cells.forEach(ni=>{if(enemyVisible[ni]==='water')probabilityMap[ni]++;});
+      }
+      if(r+size<=10){
+        let ok=true;
+        const cells=[];
+        for(let k=0;k<size;k++){const ni=idx(r+k,c);cells.push(ni);if(enemyVisible[ni]!=='water'&&enemyVisible[ni]!=='hit'){ok=false;break;}}
+        if(ok) cells.forEach(ni=>{if(enemyVisible[ni]==='water')probabilityMap[ni]++;});
+      }
+    }
+  });
+  if(showProbability) for(let i=0;i<100;i++) if(enemyVisible[i]==='water') renderEnemyCell(i);
+}
+
+function toggleProbability() {
+  showProbability=document.getElementById('prob-toggle').checked;
+  for(let i=0;i<100;i++) renderEnemyCell(i);
+}
+
+function aiTurn() {
+  if(gameState!=='playing') return;
+  let target=-1;
+  const notShot=[];
+  for(let i=0;i<100;i++) if(playerVisible[i]==='water') notShot.push(i);
+  if(notShot.length===0) return;
+
+  if(difficulty==='easy') {
+    target=notShot[Math.floor(Math.random()*notShot.length)];
+  } else if(difficulty==='medium') {
+    if(aiHitChain.length>0) {
+      target=getAdjacentTarget();
+    }
+    if(target===-1){
+      const checkerboard=notShot.filter(i=>{const r=Math.floor(i/10),c=i%10;return (r+c)%2===0;});
+      target=(checkerboard.length>0?checkerboard:notShot)[Math.floor(Math.random()*(checkerboard.length||notShot.length))];
+    }
+  } else if(difficulty==='hard') {
+    if(aiHitChain.length>0){target=getAdjacentTarget();}
+    if(target===-1){
+      const pmap=Array(100).fill(0);
+      const pShipSizes=Object.values(shipInstances).filter(s=>!sunkPlayerShips.includes(s.cells[0]+'k')).map(s=>s.cells.length);
+      const sizes=SHIPS_CONFIG.flatMap(sc=>Array(sc.count).fill(sc.size));
+      sizes.forEach(size=>{
+        for(let r=0;r<10;r++)for(let c=0;c<10;c++){
+          if(c+size<=10){let ok=true;const cls=[];for(let k=0;k<size;k++){const ni=idx(r,c+k);cls.push(ni);if(playerVisible[ni]!=='water'&&playerVisible[ni]!=='hit'){ok=false;break;}}if(ok)cls.forEach(ni=>{if(playerVisible[ni]==='water')pmap[ni]++;});}
+          if(r+size<=10){let ok=true;const cls=[];for(let k=0;k<size;k++){const ni=idx(r+k,c);cls.push(ni);if(playerVisible[ni]!=='water'&&playerVisible[ni]!=='hit'){ok=false;break;}}if(ok)cls.forEach(ni=>{if(playerVisible[ni]==='water')pmap[ni]++;});}
+        }
+      });
+      const maxP=Math.max(...notShot.map(i=>pmap[i]));
+      const best=notShot.filter(i=>pmap[i]===maxP);
+      target=best[Math.floor(Math.random()*best.length)];
+    }
+  } else {
+    if(aiHitChain.length>0){target=getAdjacentTarget();}
+    if(target===-1){
+      const maxP=Math.max(...notShot.map(i=>probabilityMap[i]));
+      const best=notShot.filter(i=>probabilityMap[i]===maxP);
+      target=best[Math.floor(Math.random()*best.length)];
+    }
+  }
+
+  const r=Math.floor(target/10),c=target%10;
+  const hit=!!playerBoard[target];
+
+  if(hit){
+    const key=playerBoard[target];
+    playerVisible[target]='hit';
+    const ship=shipInstances[key];
+    if(ship){
+      ship.hits=(ship.hits||0)+1;
+      aiHitChain.push(target);
+      if(ship.hits===ship.cells.length){
+        ship.cells.forEach(ci=>{playerVisible[ci]='sunk';renderPlayerCell(ci,'sunk');});
+        sunkPlayerShips.push(key);
+        markSurroundingMisses(ship.cells,'player');
+        aiHitChain=[];
+        aiLastHit=null;
+        if(sunkPlayerShips.length===Object.keys(shipInstances).length){
+          endGame('loss'); return;
+        }
+        setStatus(`💀 ИИ потопил ваш корабль! Ваш ход.`, 'bad');
+        isPlayerTurn=true;
+      } else {
+        renderPlayerCell(target,'hit');
+        setStatus(`🔥 ИИ попал! Атака продолжается...`, 'bad');
+        setTimeout(aiTurn, 700);
+        return;
+      }
+    }
+  } else {
+    playerVisible[target]='miss';
+    renderPlayerCell(target,'miss');
+    setStatus(`✅ ИИ промахнулся. Ваш ход!`, 'turn');
+    isPlayerTurn=true;
+    if(aiHitChain.length>0&&aiLastHit===null) aiLastHit=aiHitChain[0];
+  }
+  updateShipsLeftIndicator();
+}
+
+function getAdjacentTarget() {
+  if(aiHitChain.length===0) return -1;
+  const dirs=[[0,1],[0,-1],[1,0],[-1,0]];
+  if(aiHitChain.length>=2){
+    const a=aiHitChain[aiHitChain.length-2],b=aiHitChain[aiHitChain.length-1];
+    const dr=Math.floor(b/10)-Math.floor(a/10),dc=(b%10)-(a%10);
+    const nr=Math.floor(b/10)+dr,nc=(b%10)+dc;
+    if(nr>=0&&nr<10&&nc>=0&&nc<10&&playerVisible[idx(nr,nc)]==='water') return idx(nr,nc);
+    const nr2=Math.floor(aiHitChain[0]/10)-dr,nc2=(aiHitChain[0]%10)-dc;
+    if(nr2>=0&&nr2<10&&nc2>=0&&nc2<10&&playerVisible[idx(nr2,nc2)]==='water') return idx(nr2,nc2);
+  }
+  for(const ci of aiHitChain){
+    const r=Math.floor(ci/10),c=ci%10;
+    for(const [dr,dc] of dirs){
+      const nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<10&&nc>=0&&nc<10&&playerVisible[idx(nr,nc)]==='water') return idx(nr,nc);
+    }
+  }
+  return -1;
+}
+
+function updateShipsLeftIndicator() {
+  const el=document.getElementById('ships-left-indicator');
+  if(!el) return;
+  const totalShipCells = SHIPS_CONFIG.reduce((a,sc)=>a+sc.size*sc.count,0);
+  const sunkE = sunkEnemyShips.length;
+  const totalE = enemyShipCells.length;
+  el.innerHTML = `<div style="font-size:12px;color:var(--color-text-secondary)">
+    Кораблей врага: ${totalE-sunkE}/${totalE} &nbsp;|&nbsp; Ваших: ${Object.keys(shipInstances).length-sunkPlayerShips.length}/${Object.keys(shipInstances).length}
+  </div>`;
+}
+
+function endGame(result) {
+  gameState='ended';
+  isPlayerTurn=false;
+  const acc=totalShots>0?Math.round(totalHits/totalShots*100):0;
+
+  if(result==='win'){
+    wins++;
+    localStorage.setItem('bs_wins', wins);
+    setStatus('🎉 Победа! Вы потопили весь флот противника!', 'good');
+    enemyShipCells.forEach(s=>s.cells.forEach(i=>{
+      const el=document.getElementById(`ec-${i}`);
+      if(el&&enemyVisible[i]==='water'){el.className='cell enemy-ship';el.textContent='🚢';}
+    }));
+  } else {
+    losses++;
+    localStorage.setItem('bs_losses', losses);
+    setStatus('💀 Поражение! Ваш флот уничтожен...', 'bad');
+  }
+
+  totalAccHistory.push(acc);
+  localStorage.setItem('bs_acc', JSON.stringify(totalAccHistory));
+  const avgAcc = Math.round(totalAccHistory.reduce((a,b)=>a+b,0)/totalAccHistory.length);
+  localStorage.setItem('bs_avg_acc', avgAcc);
+
+  gameHistory.unshift({result, acc, shots:totalShots, difficulty, date: new Date().toLocaleDateString('ru')});
+  if(gameHistory.length>5) gameHistory=gameHistory.slice(0,5);
+  localStorage.setItem('bs_history', JSON.stringify(gameHistory));
+
+  updateStatsBar();
+  renderHistory();
+  document.getElementById('enemy-badge').textContent = result==='win'?'Победа!':'Поражение';
+  showAnalysis(result, acc);
+}
+
+function showAnalysis(result, acc) {
+  const section=document.getElementById('analysis-section');
+  section.style.display='block';
+  const content=document.getElementById('analysis-content');
+  content.innerHTML=`<div class="analysis-loading"><div class="analysis-dot"></div><div class="analysis-dot"></div><div class="analysis-dot"></div><span>ИИ анализирует вашу стратегию...</span></div>`;
+  section.scrollIntoView({behavior:'smooth'});
+
+  setTimeout(()=>{
+    const randomHits=moveHistory.filter(m=>m.player==='player'&&m.type!=='miss').length;
+    const misses=moveHistory.filter(m=>m.player==='player'&&m.type==='miss').length;
+    const sunk=sunkEnemyShips.length;
+
+    let tags='', tips='';
+    if(acc>=60) tags+=`<span class="analysis-tag good">🎯 Высокая точность</span>`;
+    else if(acc<35) tags+=`<span class="analysis-tag bad">😬 Низкая точность</span>`;
+    if(result==='win') tags+=`<span class="analysis-tag good">🏆 Победа</span>`;
+    else tags+=`<span class="analysis-tag bad">💀 Поражение</span>`;
+    tags+=`<span class="analysis-tag tip">📊 ${difficulty === 'easy'?'Лёгкий':difficulty==='medium'?'Средний':difficulty==='hard'?'Сложный':'Невозможный'} уровень</span>`;
+
+    let analysis='';
+    if(acc<35) analysis+='<p>Вы часто стреляли случайно, не используя паттерн "шахматной доски". Попробуйте стрелять через клетку — это увеличивает шансы найти корабль быстрее.</p>';
+    else if(acc>=60) analysis+='<p>Отличная точность! Вы хорошо чувствовали расположение кораблей и добивали их последовательно.</p>';
+    else analysis+='<p>Средняя точность. Попробуйте при первом попадании сразу проверять все 4 направления от него — это поможет быстрее потопить корабль.</p>';
+
+    if(misses > totalShots*0.7) analysis+='<p>Слишком много промахов подряд. Вероятностная карта (включите "Вероятности ИИ") поможет вам видеть, где скорее всего прячутся корабли.</p>';
+    if(result==='loss'&&difficulty!=='easy') analysis+='<p>Совет: на высоких уровнях сложности ИИ использует вероятностный поиск. Расставляйте корабли нестандартно — у краёв или плотными группами.</p>';
+    if(result==='win') analysis+='<p>Поздравляем с победой! Попробуйте повысить уровень сложности для новых испытаний. 🚀</p>';
+
+    content.innerHTML=`<div style="margin-bottom:8px">${tags}</div><div class="analysis-content">${analysis}</div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="action-btn primary" onclick="resetGame()" style="flex:1">🔄 Играть снова</button>
+      </div>`;
+  }, 1500);
+}
+
+function resetGame() {
+  gameState='placing';
+  playerBoard=Array(100).fill(0);
+  enemyBoard=Array(100).fill(0);
+  playerVisible=Array(100).fill('water');
+  enemyVisible=Array(100).fill('water');
+  playerShipCells=[];
+  enemyShipCells=[];
+  selectedShip=null;
+  isHorizontal=true;
+  placedShips={};
+  shipInstances={};
+  hoverCells=[];
+  showProbability=false;
+  probabilityMap=Array(100).fill(0);
+  moveHistory=[];
+  totalShots=0;
+  totalHits=0;
+  sunkEnemyShips=[];
+  sunkPlayerShips=[];
+  aiLastHit=null;
+  aiHitChain=[];
+  isPlayerTurn=true;
+  document.getElementById('prob-toggle').checked=false;
+  document.getElementById('prob-toggle-label').style.display='none';
+  document.getElementById('ships-panel').style.display='block';
+  document.getElementById('analysis-section').style.display='none';
+  document.getElementById('start-btn').disabled=true;
+  document.getElementById('player-badge').textContent='Расстановка';
+  document.getElementById('enemy-badge').textContent='Ждём расстановки';
+  setStatus('Расставьте корабли, чтобы начать','info');
+  initBoards();
+}
+
+function updateStatsBar() {
+  document.getElementById('stat-wins').textContent=wins;
+  document.getElementById('stat-losses').textContent=losses;
+  const accArr=JSON.parse(localStorage.getItem('bs_acc')||'[]');
+  const avg=accArr.length?Math.round(accArr.reduce((a,b)=>a+b,0)/accArr.length):0;
+  document.getElementById('stat-acc').textContent=avg;
+}
+
+function renderHistory() {
+  const list=document.getElementById('history-list');
+  if(!gameHistory.length){list.innerHTML='<div style="font-size:13px;color:var(--color-text-secondary)">Ещё нет завершённых партий</div>';return;}
+  list.innerHTML=gameHistory.map(h=>`
+    <div class="history-item">
+      <span class="history-result ${h.result==='win'?'win':'loss'}">${h.result==='win'?'🏆 Победа':'💀 Поражение'}</span>
+      <span class="history-meta">Точность: ${h.acc}% · ${h.shots} выстрелов · ${h.date}</span>
+    </div>`).join('');
+}
+
+initBoards();
+</script>
+</body>
+</html>
